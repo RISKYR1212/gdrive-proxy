@@ -10,10 +10,11 @@ app.use(express.json());
 
 // Allow frontend from Vercel
 app.use(cors({
-  origin: "https://core-management.vercel.app",
+  origin: ["http://localhost:5173", "https://core-management.vercel.app"],
   methods: ['GET', 'POST'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
+
 
 const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
 const GOOGLE_DRIVE_FOLDER_ID = process.env.GOOGLE_DRIVE_FOLDER_ID;
