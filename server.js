@@ -10,7 +10,9 @@ app.use(express.json());
 
 // Allow frontend from Vercel
 app.use(cors({
-  origin: ["http://localhost:5173", "https://core-management.vercel.app"],
+  origin: ["http://localhost:5173",
+           "https://core-management.vercel.app",
+           "https://core-management.vercel.app"],
   methods: ['GET', 'POST'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
