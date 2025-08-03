@@ -2,22 +2,23 @@ require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
 const cors = require('cors');
+app.use(cors());
+
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Middleware
 app.use(express.json());
 
-// Konfigurasi CORS: harus ditaruh **SEBELUM** semua endpoint
+// Allow frontend from Vercel
 app.use(cors({
-  origin: [
-    "http://localhost:5173",
-    "https://core-management.vercel.app"
-  ],
+  origin: ["http://localhost:5173",
+           "https://core-management.vercel.app",
+           "https://core-management-pi.vercel.app"],
   methods: ['GET', 'POST'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
+
 
 const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
 const GOOGLE_DRIVE_FOLDER_ID = process.env.GOOGLE_DRIVE_FOLDER_ID;
@@ -31,7 +32,7 @@ app.get('/', (req, res) => {
   res.send('Server is running. Endpoint tersedia di /files dan /download/:fileId');
 });
 
-// Get list of files from Google Drive
+// Get list of files
 app.get('/files', async (req, res) => {
   try {
     const url = `https://www.googleapis.com/drive/v3/files?q='${GOOGLE_DRIVE_FOLDER_ID}'+in+parents&key=${GOOGLE_API_KEY}&fields=files(id,name,mimeType)`;
@@ -59,7 +60,8 @@ app.get('/download/:fileId', async (req, res) => {
   }
 });
 
-// Jalankan server
+// const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server listening on port ${PORT}`);
 });
+
