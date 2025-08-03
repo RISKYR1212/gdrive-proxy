@@ -11,13 +11,15 @@ const PORT = process.env.PORT || 5000;
 app.use(express.json());
 
 // Allow frontend from Vercel
-app.use(cors({
-  origin: ["http://localhost:5173",
-           "https://core-management.vercel.app",
-           "https://core-management-pi.vercel.app"],
-  methods: ['GET', 'POST'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
+// app.use(cors({
+// //   origin: ["http://localhost:5173",
+// //            "https://core-management.vercel.app",
+// //            "https://core-management-pi.vercel.app"],
+// //   methods: ['GET', 'POST'],
+// //   allowedHeaders: ['Content-Type', 'Authorization']
+// // }));
+app.use(cors()); // Hanya untuk debugging sementara
+
 
 
 const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
