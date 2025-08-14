@@ -19,5 +19,13 @@
     "googleapis": "^152.0.0",
     "node-fetch": "^2.7.0",
     "winston": "^3.17.0"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RISKYR1212/gdrive-proxy.git"
+  },
+  "bugs": {
+    "url": "https://github.com/RISKYR1212/gdrive-proxy/issues"
+  },
+  "homepage": "https://github.com/RISKYR1212/gdrive-proxy#readme"
 }
