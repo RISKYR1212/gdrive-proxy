@@ -34,7 +34,7 @@ function cleanCache() {
         const stats = fs.statSync(filePath);
         if (now - stats.mtimeMs > CACHE_EXPIRE) {
             fs.unlinkSync(filePath);
-            console.log(`🗑️ Cache expired & deleted: ${file}`);
+            console.log(` Cache expired & deleted: ${file}`);
         }
     });
 }
@@ -68,17 +68,17 @@ app.get('/download/:fileId', async (req, res) => {
     if (fs.existsSync(cachePath)) {
         const stats = fs.statSync(cachePath);
         if (Date.now() - stats.mtimeMs < CACHE_EXPIRE) {
-            console.log(`📂 Serving from cache: ${fileId}`);
+            console.log(` Serving from cache: ${fileId}`);
             return res.sendFile(cachePath);
         } else {
             fs.unlinkSync(cachePath);
-            console.log(`♻️ Cache expired: ${fileId}`);
+            console.log(` Cache expired: ${fileId}`);
         }
     }
 
     // Download dari Google Drive
     try {
-        console.log(`⬇️ Downloading from Google Drive: ${fileId}`);
+        console.log(`⬇ Downloading from Google Drive: ${fileId}`);
         const fileUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&key=${GOOGLE_API_KEY}`;
         const response = await axios.get(fileUrl, { responseType: 'arraybuffer' });
 
@@ -93,5 +93,5 @@ app.get('/download/:fileId', async (req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`🚀 Server listening on port ${PORT}`);
+    console.log(` Server listening on port ${PORT}`);
 });
