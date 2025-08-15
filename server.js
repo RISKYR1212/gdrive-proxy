@@ -1,6 +1,6 @@
 require('dotenv').config();
 const express = require('express');
-const axios = require('axios');
+const fetch = require('node-fetch');
 const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
@@ -11,7 +11,7 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
-// ==== ENV CHECK ====
+// ==== ENV VARS ====
 const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
 const GOOGLE_DRIVE_FOLDER_ID = process.env.GOOGLE_DRIVE_FOLDER_ID;
 
@@ -29,114 +29,91 @@ if (!fs.existsSync(CACHE_DIR)) {
     fs.mkdirSync(CACHE_DIR, { recursive: true });
 }
 
-// 6 jam
+// 6 jam expire
 const CACHE_EXPIRE = 6 * 60 * 60 * 1000;
 
-function cleanCache() {
+// Bersihkan cache otomatis
+setInterval(() => {
     const now = Date.now();
-    try {
-        fs.readdirSync(CACHE_DIR).forEach(file => {
-            const filePath = path.join(CACHE_DIR, file);
-            const stats = fs.statSync(filePath);
-            if (now - stats.mtimeMs > CACHE_EXPIRE) {
-                fs.unlinkSync(filePath);
-                console.log(`Cache expired & deleted: ${file}`);
-            }
-        });
-    } catch (e) {
-        console.error("cleanCache error:", e.message);
-    }
-}
-setInterval(cleanCache, 30 * 60 * 1000);
+    fs.readdirSync(CACHE_DIR).forEach(file => {
+        const filePath = path.join(CACHE_DIR, file);
+        const stats = fs.statSync(filePath);
+        if (now - stats.mtimeMs > CACHE_EXPIRE) {
+            fs.unlinkSync(filePath);
+            console.log(`Cache expired & deleted: ${file}`);
+        }
+    });
+}, 30 * 60 * 1000);
 
-// ==== ROOT ====
+// ==== Ambil daftar file dari Google Drive ====
+async function listDriveFiles() {
+    const url = `https://www.googleapis.com/drive/v3/files?q='${GOOGLE_DRIVE_FOLDER_ID}'+in+parents+and+trashed=false&fields=files(id,name,mimeType)&key=${GOOGLE_API_KEY}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("Gagal fetch daftar file");
+    const data = await res.json();
+    return data.files || [];
+}
+
+// ==== Download file ====
+async function downloadFile(fileId, filename) {
+    const url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&key=${GOOGLE_API_KEY}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Gagal download file ${filename}`);
+    const filePath = path.join(CACHE_DIR, filename);
+    const buffer = await res.buffer();
+    fs.writeFileSync(filePath, buffer);
+    return filePath;
+}
+
+// ==== Endpoint root ====
 app.get('/', (req, res) => {
     res.json({
         status: "Server running",
-        endpoints: ["/files", "/download/:fileId"],
+        endpoints: ["/files", "/download/:filename"],
         cache_dir: CACHE_DIR
     });
 });
 
-// ==== LIST FILES ====
+// ==== Endpoint daftar file ====
 app.get('/files', async (req, res) => {
-    console.log("[] GET /files");
     try {
-        const q = encodeURIComponent(`'${GOOGLE_DRIVE_FOLDER_ID}' in parents and trashed = false`);
-        const url =
-            `https://www.googleapis.com/drive/v3/files?q=${q}&key=${GOOGLE_API_KEY}&fields=files(id,name,mimeType)`;
-
-        console.log("Google API URL:", url);
-
-        const response = await axios.get(url, { timeout: 15000 });
-        console.log(`Received ${response.data.files?.length || 0} files`);
-
-        res.json({ files: response.data.files || [] });
-    } catch (error) {
-        console.error("Error fetching files:", {
-            status: error.response?.status,
-            statusText: error.response?.statusText,
-            data: error.response?.data || error.message
-        });
-        res.status(500).json({
-            error: true,
-            message: "Gagal mengambil file dari Google Drive",
-            details: error.response?.data || error.message
-        });
+        const files = await listDriveFiles();
+        res.json({ files });
+    } catch (err) {
+        console.error("Error fetching files:", err);
+        res.status(500).json({ error: true, message: err.message });
     }
 });
 
-// ==== DOWNLOAD + CACHE ====
-// Download file + caching
-app.get('/download/:fileId', async (req, res) => {
-    const { fileId } = req.params;
-    console.log(`[] GET /download/${fileId}`);
-    const cachePath = path.join(CACHE_DIR, `${fileId}.kml`);
-
-    // Cek cache
-    if (fs.existsSync(cachePath)) {
-        const stats = fs.statSync(cachePath);
-        if (Date.now() - stats.mtimeMs < CACHE_EXPIRE) {
-            console.log(`Serving from cache: ${fileId}`);
-            return res.sendFile(cachePath);
-        } else {
-            fs.unlinkSync(cachePath);
-            console.log(`Cache expired: ${fileId}`);
-        }
-    }
-
+// ==== Endpoint download file ====
+app.get('/download/:filename', async (req, res) => {
     try {
-        const fileUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&key=${GOOGLE_API_KEY}`;
-        console.log(`Downloading from: ${fileUrl}`);
+        const filename = req.params.filename;
+        const filePath = path.join(CACHE_DIR, filename);
 
-        const response = await axios.get(fileUrl, { responseType: 'arraybuffer' });
-        fs.writeFileSync(cachePath, response.data);
+        // Cek cache
+        if (fs.existsSync(filePath)) {
+            console.log(`Serving from cache: ${filename}`);
+            res.setHeader("Content-Type", "application/vnd.google-earth.kml+xml");
+            return res.sendFile(filePath);
+        }
 
-        console.log(`File saved to cache: ${cachePath}`);
-        res.setHeader('Content-Disposition', `attachment; filename="${fileId}.kml"`);
-        res.setHeader('Content-Type', 'application/vnd.google-earth.kml+xml');
-        res.sendFile(cachePath);
+        // Cari file di Google Drive
+        const files = await listDriveFiles();
+        const file = files.find(f => f.name === filename);
+        if (!file) return res.status(404).json({ error: "File tidak ditemukan" });
 
-    } catch (error) {
-        // Tambahan debug detail
-        console.error("Error downloading file from Google Drive:", {
-            status: error.response?.status,
-            statusText: error.response?.statusText,
-            headers: error.response?.headers,
-            data: error.response?.data || error.message,
-            fileId: fileId
-        });
+        // Download baru
+        const downloadedPath = await downloadFile(file.id, filename);
+        res.setHeader("Content-Type", "application/vnd.google-earth.kml+xml");
+        res.sendFile(downloadedPath);
 
-        res.status(500).json({
-            error: true,
-            message: "Gagal mengunduh file dari Google Drive",
-            googleStatus: error.response?.status,
-            googleStatusText: error.response?.statusText,
-            googleError: error.response?.data || error.message
-        });
+    } catch (err) {
+        console.error("Download error:", err);
+        res.status(500).json({ error: true, message: err.message });
     }
 });
 
 app.listen(PORT, () => {
-    console.log(` Server listening on port ${PORT}`);
+    console.log(`🚀 Server listening on port ${PORT}`);
 });
