@@ -86,33 +86,29 @@ app.get('/files', async (req, res) => {
 });
 
 // ==== Endpoint download file ====
-app.get('/download/:filename', async (req, res) => {
+app.get('/download/:fileId', async (req, res) => {
     try {
-        const filename = req.params.filename;
-        const filePath = path.join(CACHE_DIR, filename);
+        const fileId = req.params.fileId;
+        const files = await listDriveFiles();
+        const file = files.find(f => f.id === fileId);
+        if (!file) return res.status(404).json({ error: "File tidak ditemukan" });
 
-        // Cek cache
+        const filePath = path.join(CACHE_DIR, file.name);
         if (fs.existsSync(filePath)) {
-            console.log(`Serving from cache: ${filename}`);
+            console.log(`Serving from cache: ${file.name}`);
             res.setHeader("Content-Type", "application/vnd.google-earth.kml+xml");
             return res.sendFile(filePath);
         }
 
-        // Cari file di Google Drive
-        const files = await listDriveFiles();
-        const file = files.find(f => f.name === filename);
-        if (!file) return res.status(404).json({ error: "File tidak ditemukan" });
-
-        // Download baru
-        const downloadedPath = await downloadFile(file.id, filename);
+        const downloadedPath = await downloadFile(fileId, file.name);
         res.setHeader("Content-Type", "application/vnd.google-earth.kml+xml");
         res.sendFile(downloadedPath);
-
     } catch (err) {
         console.error("Download error:", err);
         res.status(500).json({ error: true, message: err.message });
     }
 });
+
 
 app.listen(PORT, () => {
     console.log(`🚀 Server listening on port ${PORT}`);
